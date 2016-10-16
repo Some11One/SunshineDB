@@ -15,10 +15,14 @@
  */
 package com.example.android.sunshine.app;
 
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
+import android.preference.PreferenceManager;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.LoaderManager;
 import android.support.v4.content.CursorLoader;
@@ -31,15 +35,26 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ListView;
+import android.widget.Toast;
 
 import com.example.android.sunshine.app.data.WeatherContract;
+
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Encapsulates fetching the forecast and displaying it as a {@link ListView} layout.
  */
 public class ForecastFragment extends Fragment implements LoaderManager.LoaderCallbacks<Cursor> {
 
+    // log
+    private final String LOG_TAG = ForecastFragment.class.getSimpleName();
+
+    // saved cities key for sharedPreferences
+    private final static String SAVED_CITIES_KEY = "SAVED_CITIES";
+
     private static final int FORECAST_LOADER = 0;
+
     // For the forecast view we're showing only a small subset of the stored data.
     // Specify the columns we need.
     private static final String[] FORECAST_COLUMNS = {
@@ -80,7 +95,6 @@ public class ForecastFragment extends Fragment implements LoaderManager.LoaderCa
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // Add this line in order for this fragment to handle menu events.
         setHasOptionsMenu(true);
     }
 
@@ -91,12 +105,14 @@ public class ForecastFragment extends Fragment implements LoaderManager.LoaderCa
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
         int id = item.getItemId();
         if (id == R.id.action_refresh) {
             updateWeather();
+            getLoaderManager().restartLoader(FORECAST_LOADER, null, this);
+            return true;
+        }
+        if (id == R.id.action_choose_city){
+            chooseCity();
             return true;
         }
         return super.onOptionsItemSelected(item);
@@ -105,9 +121,7 @@ public class ForecastFragment extends Fragment implements LoaderManager.LoaderCa
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        // The CursorAdapter will take data from our cursor and populate the ListView.
         mForecastAdapter = new ForecastAdapter(getActivity(), null, 0);
-
         View rootView = inflater.inflate(R.layout.fragment_main, container, false);
 
         // Get a reference to the ListView, and attach this adapter to it.
@@ -142,15 +156,132 @@ public class ForecastFragment extends Fragment implements LoaderManager.LoaderCa
     }
 
     // since we read the location when we create the loader, all we need to do is restart things
-    void onLocationChanged( ) {
+    void onLocationChanged() {
         updateWeather();
         getLoaderManager().restartLoader(FORECAST_LOADER, null, this);
     }
 
+    private void updateWeather(String weatherPostalCode){
+        FetchWeatherTask weatherTask = new FetchWeatherTask(getActivity());
+        weatherTask.execute(weatherPostalCode);
+    }
+
     private void updateWeather() {
         FetchWeatherTask weatherTask = new FetchWeatherTask(getActivity());
-        String location = Utility.getPreferredLocation(getActivity());
-        weatherTask.execute(location);
+
+        // load shared Preferences
+        final SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
+
+        // checking current postal code preference
+        final String weatherPostalCode = sharedPreferences.getString(getActivity().getString(R.string.pref_location_key)
+                , getActivity().getString(R.string.pref_location_default));
+
+        // check if user wants to save city
+        final Set<String> savedCity = sharedPreferences.getStringSet(SAVED_CITIES_KEY,  new HashSet<String>());
+        if (!savedCity.contains(weatherPostalCode)){
+            // ask to add city
+            AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
+            builder.setMessage("Save location: " + getCity(weatherPostalCode) + "?")
+                    .setPositiveButton("Yes", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            Set<String> newSavedCities = new HashSet<>(savedCity.size() + 1);
+                            newSavedCities.addAll(savedCity);
+                            newSavedCities.add(weatherPostalCode);
+                            sharedPreferences.edit().putStringSet(SAVED_CITIES_KEY, newSavedCities).apply();
+                        }
+                    })
+                    .setNegativeButton("No", new DialogInterface.OnClickListener(){
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+
+                        }
+                    });
+            AlertDialog dialog = builder.create();
+            dialog.show();
+        }
+
+
+        weatherTask.execute(weatherPostalCode);
+    }
+
+    // let user decide witch city weather to show
+    private void chooseCity(){
+
+        // get saved cities
+        final SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
+        final Set<String> savedCity = sharedPreferences.getStringSet(SAVED_CITIES_KEY,  new HashSet<String>());
+
+        // no saved cities
+        if (savedCity.size() == 0){
+            Toast.makeText(getActivity(), "No saved cities", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // prepare dialog
+        AlertDialog.Builder builder = new AlertDialog.Builder(getActivity());
+        CharSequence[] charSequences = new CharSequence[savedCity.size()];
+        int index = 0;
+        for (String f : savedCity) {
+            charSequences[index] = getCity(f);
+            index++;
+        }
+        builder.setTitle("Choose city")
+                .setItems(charSequences, new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int which) {
+                        String newCity = (String) savedCity.toArray()[which];
+//                        FetchWeatherTask weatherTask = new FetchWeatherTask(getActivity());
+//                        weatherTask.execute(newCity);
+                       //  updateWeather(newCity);
+                        // getLoaderManager().restartLoader(FORECAST_LOADER, null, ForecastFragment.this);
+                        sharedPreferences.edit().putString(getActivity().getString(R.string.pref_location_key)
+                                , newCity).apply();
+                        // updateWeather(newCity);
+                        onLocationChanged();
+                    }
+                });
+        AlertDialog dialog = builder.create();
+        dialog.show();
+    }
+
+    // get City name from postal code
+    public static String getCity(String postal){
+        switch (postal){
+            case "143320": return Cities.MOSCOW.getName();
+            case "198504": return Cities.SAINT_PETERSBURG.getName();
+            case "141070": return Cities.KOROLEV.getName();
+            default:
+                return "";
+        }
+    }
+
+    // cities and their postal code
+    enum Cities{
+        MOSCOW{
+            public String getPostal(){
+                return "143320";
+            }
+            public String getName(){
+                return "Moscow";
+            }
+        }, SAINT_PETERSBURG{
+            public String getPostal(){
+                return "198504";
+            }
+            public String getName(){
+                return "Saint Petersburg";
+            }
+        }, KOROLEV{
+            public String getPostal(){
+                return "141070";
+            }
+            public String getName(){
+                return "Korolev";
+            }
+        };
+
+        public abstract String getPostal();
+        public abstract String getName();
     }
 
     @Override
