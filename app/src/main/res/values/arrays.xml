@@ -10,4 +10,16 @@
         <item>@string/pref_units_metric</item>
         <item>@string/pref_units_imperial</item>
     </string-array>
+
+    <string-array name="citiesArray">
+        <item>Moscow</item>
+        <item>Saint Petersburg</item>
+        <item>Korolev</item>
+    </string-array>
+
+    <string-array name="citiesValues">
+        <item>143320</item>
+        <item>198504</item>
+        <item>141070</item>
+    </string-array>
 </resources>

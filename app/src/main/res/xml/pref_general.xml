@@ -3,12 +3,14 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <EditTextPreference
-        android:title="@string/pref_location_label"
-        android:key="@string/pref_location_key"
+    <ListPreference
         android:defaultValue="@string/pref_location_default"
-        android:inputType="text"
-        android:singleLine="true" />
+        android:entries="@array/citiesArray"
+        android:entryValues="@array/citiesValues"
+        android:key="@string/pref_location_key"
+        android:title="@string/pref_location_label">
+
+    </ListPreference>
 
     <ListPreference
         android:title="@string/pref_units_label"

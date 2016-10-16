@@ -15,12 +15,16 @@
  */
 package com.example.android.sunshine.app;
 
+import android.app.Activity;
 import android.content.ContentUris;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.AsyncTask;
+import android.preference.PreferenceManager;
+import android.support.v7.internal.view.menu.ActionMenuItemView;
 import android.text.format.Time;
 import android.util.Log;
 
@@ -38,6 +42,8 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Vector;
+
+import static com.example.android.sunshine.app.ForecastFragment.getCity;
 
 public class FetchWeatherTask extends AsyncTask<String, Void, Void> {
 
@@ -338,5 +344,17 @@ public class FetchWeatherTask extends AsyncTask<String, Void, Void> {
             }
         }
         return null;
+    }
+
+    @Override
+    protected void onPostExecute(Void aVoid) {
+
+        final SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(mContext);
+        final String weatherPostalCode = sharedPreferences.getString(mContext.getString(R.string.pref_location_key)
+                , mContext.getString(R.string.pref_location_default));
+
+        String cityName = getCity(weatherPostalCode);
+        ((ActionMenuItemView)((Activity) mContext).findViewById(R.id.action_choose_city)).setTitle("CITY\\" + cityName);
+
     }
 }
